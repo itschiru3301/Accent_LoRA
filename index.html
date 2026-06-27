@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zero-Shot Accent Transfer via LoRA Fine-Tuning of F5-TTS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #fff;
+  color: #111;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+}
+.page { max-width: 860px; margin: 0 auto; padding: 0 1.5rem; }
+
+/* HEADER */
+header {
+  padding: 4rem 1.5rem 2.5rem;
+  max-width: 860px;
+  margin: 0 auto;
+  text-align: center;
+}
+h1 {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 300;
+  font-size: clamp(1.6rem, 3.5vw, 2.35rem);
+  line-height: 1.3;
+  margin-bottom: 1.4rem;
+  color: #111;
+}
+h1 em { font-style: italic; }
+.authors { font-size: 1rem; color: #333; margin-bottom: 0.3rem; }
+.affiliation { font-size: 0.88rem; color: #777; margin-bottom: 2rem; }
+.links {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #333;
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+.links a:hover { border-color: #888; color: #000; }
+
+hr { border: none; border-top: 1px solid #e5e5e5; margin: 2.5rem 0; }
+
+section { padding: 0.5rem 0 2rem; }
+h2 {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 400;
+  font-size: 1.35rem;
+  margin-bottom: 1rem;
+  color: #111;
+}
+p { color: #222; margin-bottom: 0.9rem; font-size: 0.97rem; }
+p:last-child { margin-bottom: 0; }
+
+/* PIPELINE */
+.pipeline-fig {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: #fafafa;
+  padding: 1.8rem 1.5rem;
+  margin: 1.5rem 0;
+}
+.pipeline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
+}
+.pipe-step { text-align: center; padding: 0.6rem 0.8rem; min-width: 120px; }
+.pipe-step .box {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 0.35rem;
+  line-height: 1.4;
+}
+.pipe-step .sub { font-size: 0.72rem; color: #888; line-height: 1.4; }
+.pipe-arrow { font-size: 1.2rem; color: #bbb; padding: 0 0.1rem; flex-shrink: 0; }
+.fig-caption {
+  font-size: 0.83rem;
+  color: #555;
+  text-align: center;
+  margin-top: 1.2rem;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* AUDIO TABLE */
+.accent-tabs {
+  display: flex;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 1.5rem;
+}
+.accent-tab {
+  padding: 0.5rem 1.2rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #888;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s;
+}
+.accent-tab.active { color: #111; border-bottom-color: #111; }
+.accent-tab:hover:not(.active) { color: #444; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.sample-table { width: 100%; border-collapse: collapse; }
+.sample-table thead th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  padding: 0.5rem 1rem 0.5rem 0;
+  border-bottom: 2px solid #ddd;
+  text-align: left;
+}
+.sample-table thead th:not(:first-child) { text-align: center; }
+.sample-table tbody tr { border-bottom: 1px solid #eee; }
+.sample-table tbody tr:last-child { border-bottom: none; }
+.sample-table td {
+  padding: 0.85rem 1rem 0.85rem 0;
+  vertical-align: middle;
+  font-size: 0.88rem;
+}
+.sample-table td:not(:first-child) { text-align: center; }
+.text-cell { color: #222; font-style: italic; max-width: 340px; line-height: 1.5; }
+
+/* PLAYER */
+.audio-widget { display: inline-flex; align-items: center; gap: 0.5rem; }
+.play-btn {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.play-btn:hover { background: #f0f0f0; border-color: #999; }
+.play-btn svg { width: 12px; height: 12px; fill: #333; margin-left: 1px; }
+.prog-track {
+  width: 72px; height: 3px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.prog-fill { height: 100%; background: #555; border-radius: 2px; width: 0%; transition: width 0.1s linear; }
+
+/* BIBTEX */
+.bibtex-block {
+  background: #f7f7f7;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 1.2rem 1.4rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  line-height: 1.8;
+  color: #333;
+  white-space: pre;
+  overflow-x: auto;
+  position: relative;
+}
+.copy-btn {
+  position: absolute; top: 0.7rem; right: 0.7rem;
+  font-size: 0.75rem;
+  font-family: 'Source Sans 3', sans-serif;
+  padding: 0.25rem 0.6rem;
+  background: #fff; border: 1px solid #ccc; border-radius: 3px;
+  cursor: pointer; color: #555;
+}
+.copy-btn:hover { background: #eee; }
+
+footer {
+  padding: 3rem 0 4rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: #aaa;
+  border-top: 1px solid #eee;
+  margin-top: 2rem;
+}
+footer a { color: #888; text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+
+@media (max-width: 600px) {
+  .pipeline { flex-direction: column; }
+  .pipe-arrow { transform: rotate(90deg); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <p style="font-size:0.8rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#777;margin-bottom:1.2rem;">Project · 2026</p>
+  <h1>Zero-Shot Foreign Accent Synthesis via<br>LoRA Fine-Tuning of F5-TTS</h1>
+  <p class="authors">Chiranjeevi C</p>
+  <p class="affiliation">Personal Project</p>
+  <div class="links">
+    <a href="https://github.com/itschiru3301/Accent_LoRA">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.37.6.11.82-.26.82-.58v-2.03c-3.34.72-4.04-1.61-4.04-1.61-.54-1.37-1.33-1.74-1.33-1.74-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02.005 2.04.14 3 .4 2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58C20.57 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      Code
+    </a>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Overview -->
+  <section>
+    <h2>Overview</h2>
+    <p>
+      We fine-tune <a href="https://github.com/SWivid/F5-TTS" style="color:#1a73e8;">F5-TTS</a> with LoRA adapters using a cross-lingual reconstruction objective: given a native Spanish (or Italian) transcript and its audio, the model is trained to reproduce the original speech. No accented English recordings are used at any point. At inference, supplying an English transcript to the same checkpoint yields English speech that carries the prosodic character of the training language — rhythm, stress, and intonation — without ever having heard Spanish-accented English.
+    </p>
+    <p>
+      The hypothesis is that prosodic priors are disentangled from phoneme identity within the model's internal representations, and that LoRA's low-rank constraint encourages the adapters to capture suprasegmental features rather than language-specific phonology.
+    </p>
+
+    <div class="pipeline-fig">
+      <div class="pipeline">
+        <div class="pipe-step">
+          <div class="box">Native Speech<br>(ES / IT)</div>
+          <div class="sub">Audio + transcript<br>No accented EN data</div>
+        </div>
+        <span class="pipe-arrow">→</span>
+        <div class="pipe-step">
+          <div class="box">LoRA Fine-Tuning</div>
+          <div class="sub">Cross-lingual<br>reconstruction loss</div>
+        </div>
+        <span class="pipe-arrow">→</span>
+        <div class="pipe-step">
+          <div class="box">English Inference</div>
+          <div class="sub">English text →<br>LoRA checkpoint</div>
+        </div>
+        <span class="pipe-arrow">→</span>
+        <div class="pipe-step">
+          <div class="box">Accented English</div>
+          <div class="sub">ES / IT prosody<br>EN phonemes</div>
+        </div>
+      </div>
+      <p class="fig-caption">Training uses only native-language data. The LoRA weights encode prosodic priors that generalise to English at inference.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- Samples -->
+  <section>
+    <h2>Audio Samples</h2>
+    <p style="margin-bottom:1.5rem;">
+      Each row is the same English sentence spoken with the corresponding accent via our LoRA output. All samples use a single neutral reference speaker.
+    </p>
+
+    <div class="accent-tabs">
+      <button class="accent-tab active" onclick="switchAccent('es', this)">Spanish Accent</button>
+      <button class="accent-tab" onclick="switchAccent('it', this)">Italian Accent</button>
+    </div>
+
+    <!-- SPANISH -->
+    <div class="tab-panel active" id="panel-es">
+      <table class="sample-table">
+        <thead>
+          <tr>
+            <th>Text</th>
+            <th>Spanish Accent (LoRA)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-cell">"The weather today is absolutely beautiful."</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'es-1')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'es-1')"><div class="prog-fill" id="prog-es-1"></div></div></div></td>
+          </tr>
+          <tr>
+            <td class="text-cell">"Open the door, please."</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'es-2')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'es-2')"><div class="prog-fill" id="prog-es-2"></div></div></div></td>
+          </tr>
+          <tr>
+            <td class="text-cell">"See you later!"</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'es-3')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'es-3')"><div class="prog-fill" id="prog-es-3"></div></div></div></td>
+          </tr>
+          <tr>
+            <td class="text-cell">"I am happy to be here."</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'es-4')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'es-4')"><div class="prog-fill" id="prog-es-4"></div></div></div></td>
+          </tr>
+          <tr>
+            <td class="text-cell">"Where is the nearest train station, please?"</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'es-5')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'es-5')"><div class="prog-fill" id="prog-es-5"></div></div></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ITALIAN -->
+    <div class="tab-panel" id="panel-it">
+      <table class="sample-table">
+        <thead>
+          <tr>
+            <th>Text</th>
+            <th>Italian Accent (LoRA)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-cell">"The weather today is absolutely beautiful."</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'it-1')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'it-1')"><div class="prog-fill" id="prog-it-1"></div></div></div></td>
+          </tr>
+          <tr>
+            <td class="text-cell">"Please open the door, it is very hot in here."</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'it-2')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'it-2')"><div class="prog-fill" id="prog-it-2"></div></div></div></td>
+          </tr>
+          <tr>
+            <td class="text-cell">"See you Tomorrow, take care of yourself."</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'it-3')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'it-3')"><div class="prog-fill" id="prog-it-3"></div></div></div></td>
+          </tr>
+          <tr>
+            <td class="text-cell">"I am happy to be here with you today."</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'it-4')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'it-4')"><div class="prog-fill" id="prog-it-4"></div></div></div></td>
+          </tr>
+          <tr>
+            <td class="text-cell">"Where is the nearest train station, please?"</td>
+            <td><div class="audio-widget"><button class="play-btn" onclick="togglePlay(this,'it-5')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><div class="prog-track" onclick="seek(event,'it-5')"><div class="prog-fill" id="prog-it-5"></div></div></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <!-- Citation -->
+  <section>
+    <h2>Citation</h2>
+    <p>If you find this work useful, please cite:</p>
+    <div class="bibtex-block" id="bibtex"><button class="copy-btn" onclick="copyBib()">Copy</button>@misc{chiranjeevi2025accentlora,
+  title  = {Zero-Shot Foreign Accent Synthesis via LoRA Fine-Tuning of F5-TTS},
+  author = {Chiranjeevi C},
+  year   = {2026},
+  url    = {https://github.com/itschiru3301/Accent_LoRA}
+}</div>
+  </section>
+
+</div>
+
+<footer>
+  <p>Built on <a href="https://github.com/SWivid/F5-TTS">F5-TTS</a>. Page template inspired by <a href="https://nerfies.github.io">Nerfies</a>.</p>
+</footer>
+
+<script>
+  const audioMap = {
+    'es-1': 'audio/es_weather.wav',
+    'es-2': 'audio/es_open_door.wav',
+    'es-3': 'audio/es_see_you.wav',
+    'es-4': 'audio/es_i_am_happy.wav',
+    'es-5': 'audio/es_train.wav',
+    'it-1': 'audio/it_weather.wav',
+    'it-2': 'audio/it_open_door.wav',
+    'it-3': 'audio/it_see_you.wav',
+    'it-4': 'audio/it_i_am_happy.wav',
+    'it-5': 'audio/it_train.wav',
+  };
+
+  const players = {};
+
+  function getAudio(id) {
+    if (!players[id]) {
+      const a = new Audio(audioMap[id] || '');
+      players[id] = a;
+      a.addEventListener('timeupdate', () => {
+        const p = document.getElementById('prog-' + id);
+        if (p && a.duration) p.style.width = (a.currentTime / a.duration * 100) + '%';
+      });
+      a.addEventListener('ended', () => resetBtn(id));
+    }
+    return players[id];
+  }
+
+  function togglePlay(btn, id) {
+    const a = getAudio(id);
+    if (a.paused) {
+      Object.entries(players).forEach(([k, x]) => { if (k !== id && !x.paused) { x.pause(); resetBtn(k); } });
+      a.play().catch(() => {});
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+    } else {
+      a.pause();
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    }
+  }
+
+  function resetBtn(id) {
+    const btn = document.querySelector(`[onclick="togglePlay(this,'${id}')"]`);
+    if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    const p = document.getElementById('prog-' + id);
+    if (p) p.style.width = '0%';
+  }
+
+  function seek(e, id) {
+    const a = getAudio(id);
+    const r = e.currentTarget.getBoundingClientRect();
+    if (a.duration) a.currentTime = ((e.clientX - r.left) / r.width) * a.duration;
+  }
+
+  function switchAccent(lang, btn) {
+    document.querySelectorAll('.accent-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + lang).classList.add('active');
+    Object.values(players).forEach(a => { if (!a.paused) a.pause(); });
+    document.querySelectorAll('.play-btn').forEach(b => {
+      b.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    });
+  }
+
+  function copyBib() {
+    const text = document.getElementById('bibtex').innerText.replace('Copy\n', '');
+    navigator.clipboard.writeText(text).then(() => {
+      const b = document.querySelector('.copy-btn');
+      b.textContent = 'Copied!';
+      setTimeout(() => b.textContent = 'Copy', 1500);
+    });
+  }
+</script>
+</body>
+</html>
